@@ -58,6 +58,8 @@ GIT_EXEC_PATH=/usr/lib/git-core git push
 
 首次建仓并推送：`GH_TOKEN=github_pat_... bash scripts/publish-github.sh <github-username>`（脚本会自动挑一个能联网的 git）。
 
+插件启动时如果发现 `$DSH_HOME/tools/bin/git`，会把它放到 PATH 最前面——这样面板里对 `github:` 规格插件的更新也能正常解析，不需要改宿主启动参数。
+
 ## 已知边界
 
 - 只升级**核心**与**插件**；若某插件最新版不认任何新核心，会停在当前核心并提示，不会硬升。
