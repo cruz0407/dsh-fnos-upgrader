@@ -47,6 +47,17 @@ curl --unix-socket "$(dirname "${DSH_CWD:-/vol2/@appcenter/fn-deepseek-harness}"
 
 `lib/fnos-patch.js` 把这一步改成「祖先打不开就跳过」（fsync 只是崩溃持久性加固，不是正确性）。补丁带标记、幂等，插件启动时检查一次，**每次核心升级后自动重打**，因为核心安装会整个替换这个包。
 
+
+## 从源码更新 / 发布
+
+本仓库同时是插件源码。飞牛自带的 PATH 里的 git 缺少 HTTPS 传输助手（`git-remote-https`），联网的 git 操作要么用 `/usr/bin/git`，要么显式指定：
+
+```sh
+GIT_EXEC_PATH=/usr/lib/git-core git push
+```
+
+首次建仓并推送：`GH_TOKEN=github_pat_... bash scripts/publish-github.sh <github-username>`（脚本会自动挑一个能联网的 git）。
+
 ## 已知边界
 
 - 只升级**核心**与**插件**；若某插件最新版不认任何新核心，会停在当前核心并提示，不会硬升。

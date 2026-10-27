@@ -19,6 +19,19 @@ if [ -z "$USER" ]; then
   exit 1
 fi
 
+# fnOS ships a PATH git without the HTTPS transport helper (`git-remote-https`),
+# so pick a git that can actually talk to github.com.
+GIT_BIN="${GIT_BIN:-}"
+for candidate in "${GIT_BIN}" /usr/bin/git git; do
+  [ -n "$candidate" ] || continue
+  exec_path="$("$candidate" --exec-path 2>/dev/null)" || continue
+  if [ -x "$exec_path/git-remote-https" ]; then GIT_BIN="$candidate"; break; fi
+done
+if [ -z "$GIT_BIN" ]; then
+  echo "找不到带 HTTPS 传输助手的 git（可设置 GIT_BIN=/usr/bin/git）" >&2
+  exit 1
+fi
+
 cd "$(dirname "$0")/.."
 
 # Keep the manifest truthful about where this lives.
@@ -33,10 +46,10 @@ pkg.bugs = { url: `${url}/issues` }
 fs.writeFileSync(file, JSON.stringify(pkg, null, 1) + "\n")
 ' GH_USER="$USER" GH_REPO="$REPO"
 
-git init -b main >/dev/null 2>&1 || true
-git add -A
-if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-  git -c user.name="$USER" -c user.email="$USER@users.noreply.github.com" \
+"$GIT_BIN" init -b main >/dev/null 2>&1 || true
+"$GIT_BIN" add -A
+if ! "$GIT_BIN" rev-parse --verify HEAD >/dev/null 2>&1; then
+  "$GIT_BIN" -c user.name="$USER" -c user.email="$USER@users.noreply.github.com" \
     commit -q -m "dsh-fnos-upgrader: fnOS-adapted DeepSeek Harness updater
 
 Fork of dsh-update-copilot (MIT) with fnOS-specific changes:
@@ -46,7 +59,7 @@ Fork of dsh-update-copilot (MIT) with fnOS-specific changes:
 - patch-name audit and host-package resolution fixed for shim/npm-global installs
 - attachment durability patch for /vol* mode-000 mounts"
 else
-  git -c user.name="$USER" -c user.email="$USER@users.noreply.github.com" \
+  "$GIT_BIN" -c user.name="$USER" -c user.email="$USER@users.noreply.github.com" \
     commit -q -m "Update dsh-fnos-upgrader" || true
 fi
 
@@ -61,9 +74,9 @@ case "$status" in
   *)   echo "创建仓库失败 HTTP $status" >&2; cat /tmp/dsh-fnos-upgrader-create.json >&2; exit 1 ;;
 esac
 
-git remote remove origin >/dev/null 2>&1 || true
-git remote add origin "https://github.com/$USER/$REPO.git"
-git push -q "https://x-access-token:$GH_TOKEN@github.com/$USER/$REPO.git" main:main
-git branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
+"$GIT_BIN" remote remove origin >/dev/null 2>&1 || true
+"$GIT_BIN" remote add origin "https://github.com/$USER/$REPO.git"
+"$GIT_BIN" push -q "https://x-access-token:$GH_TOKEN@github.com/$USER/$REPO.git" main:main
+"$GIT_BIN" branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
 
 echo "完成: https://github.com/$USER/$REPO"
