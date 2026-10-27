@@ -1,0 +1,72 @@
+{
+ "name": "dsh-fnos-upgrader",
+ "version": "0.1.0",
+ "description": "fnOS 版 DeepSeek Harness 升级助手：本体/bundle/插件全量雷达、带闸门的一键更新、飞牛网关一键重启与升级后自动重启。Fork of dsh-update-copilot (MIT) adapted for fnOS.",
+ "keywords": [
+  "dsh-plugin",
+  "deepseek-harness",
+  "dsh",
+  "update-checker",
+  "plugin-manager",
+  "dependency-updates",
+  "version-radar",
+  "semver",
+  "agent-tools",
+  "cordis-plugin",
+  "preflight",
+  "patch-audit"
+ ],
+ "type": "module",
+ "main": "lib/index.js",
+ "bin": {
+  "dsh-fnos-upgrader": "lib/cli.js"
+ },
+ "license": "MIT",
+ "dsh": {
+  "bundle": {
+   "patch": "./cordis.patch.yml"
+  },
+  "client": {
+   "inject": [
+    "@deepseek-ai/dsh-client-locale"
+   ],
+   "platform": "web"
+  }
+ },
+ "exports": {
+  ".": "./lib/index.js",
+  "./client": "./client/client.js",
+  "./cordis.patch.yml": "./cordis.patch.yml",
+  "./package.json": "./package.json"
+ },
+ "files": [
+  "lib",
+  "client",
+  "cordis.patch.yml",
+  "README.md",
+  "LICENSE"
+ ],
+ "peerDependencies": {
+  "@deepseek-ai/cordis": ">=4.0.0-rc.7 <5.0.0",
+  "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1"
+ },
+ "peerDependenciesMeta": {
+  "@deepseek-ai/dsh-tools": {
+   "optional": true
+  }
+ },
+ "engines": {
+  "node": ">=22"
+ },
+ "scripts": {
+  "scan": "node lib/cli.js"
+ },
+ "repository": {
+  "type": "git",
+  "url": "git+https://github.com/cruz0407/dsh-fnos-upgrader.git"
+ },
+ "homepage": "https://github.com/cruz0407/dsh-fnos-upgrader",
+ "bugs": {
+  "url": "https://github.com/cruz0407/dsh-fnos-upgrader/issues"
+ }
+}
