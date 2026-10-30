@@ -59,6 +59,9 @@ const zh = {
   coreExecBlocked: '本体更新被闸门拦下',
   coreUpdated: '✓ 本体已更新至 {v}',
   coreRestartHint: '当前进程仍运行旧版 {cur} —— 重启 dsh（如 dsh web）后新版本才生效。',
+  tabIntro: '检查本体与插件的更新：按插件实际声明的兼容范围挑版本，升级后可直接用飞牛网关重启。',
+  tabUpToDate: '全部已是最新',
+  openAssistant: '打开更新助手',
   corePickVersion: '指定本体版本',
   coreBlockedBy: '这些插件不接受该版本：{names}',
   coreUpdatePluginsFirst: '先把下面这些插件更新到最新版，再装这个本体版本即可。',
@@ -220,6 +223,9 @@ const en = {
   coreExecBlocked: 'Core update blocked by the gate',
   coreUpdated: '✓ Core updated to {v}',
   coreRestartHint: 'This process still runs the old {cur} — restart dsh (e.g. dsh web) for the new version to take effect.',
+  tabIntro: 'Check core and plugin updates: versions are picked against what the plugins actually declare, and the fnOS gateway can restart the host afterwards.',
+  tabUpToDate: 'Everything is up to date',
+  openAssistant: 'Open the update assistant',
   corePickVersion: 'Pin a core version',
   coreBlockedBy: 'Plugins that refuse this version: {names}',
   coreUpdatePluginsFirst: 'Update those plugins to their latest release first, then install this core version.',
@@ -508,6 +514,8 @@ function injectStyles() {
     // icon buttons from being squeezed to zero.
     '.duc-foot-row{flex:1 1 auto;width:auto;min-width:0;overflow:hidden}',
     '.duc-foot-row .duc-foot-btn,.duc-foot-row .duc-foot-quick{flex:0 1 auto;min-width:28px}',
+    '.duc-tab{display:flex;flex-direction:column;gap:10px;padding:10px 2px}',
+    '.duc-tab-intro{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#6b7280)}',
   ].join('\n')
   // Self-healing replace: a page that kept an older bundle's sheet (same id,
   // possibly without the rules a newer bundle adds) must not block the fresh
@@ -2553,6 +2561,25 @@ function FootTrigger({ t, wide }) {
 }
 
 // ---------------------------------------------------------------------------
+/** Plugins-page tab: the entry point that does not compete for footer width. */
+function UpgraderTab({ t }) {
+  const [summary, setSummary] = useState(null)
+  useEffect(() => {
+    let alive = true
+    loadBadgeStatus()
+      .then((data) => { if (alive) setSummary(data?.summary ?? null) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const behind = summary === null ? null : (summary.behindPlugins ?? 0) + (summary.behindCore ?? 0)
+  return h('div', { className: 'duc-tab' },
+    h('p', { className: 'duc-tab-intro' }, t('tabIntro')),
+    h('div', { className: 'duc-actions' },
+      h('button', { className: 'duc-btn primary', onClick: () => setUi({ open: true }) }, t('openAssistant')),
+      behind !== null && behind > 0 ? h('span', { className: 'duc-badge behind' }, String(behind)) : null,
+      behind === 0 ? h('span', { className: 'duc-note' }, t('tabUpToDate')) : null))
+}
+
 // Seat 3: the popup modal in the shell overlay layer.
 // ---------------------------------------------------------------------------
 
@@ -2757,14 +2784,18 @@ exports.apply = function apply(ctx) {
   const t = ctx.locale.bind(NS)
 
   // Beside Settings at the sidebar foot; the shell hands each occupant { wide }.
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-    name: 'sidebar.footer.action',
-    id: 'update-copilot-trigger',
-    order: 10,
+  // The sidebar foot is one shared flex row and the fnOS refresh/restart group
+  // claims it; a fourth occupant can only survive there as a bare icon. Plugin
+  // management lives on the Plugins page, so the assistant is a tab there —
+  // same place as 已安装 / 插件市场, with room for a real sentence.
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
+    id: 'fnos-upgrader',
+    order: 65,
     label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
-  }, (props) => h(FootTrigger, { t, wide: props?.wide === true })))
+  }, (props) => h(UpgraderTab, { t: props?.t ?? t })))
 
   // The popup: one frame-wide floating layer occupant that renders null closed.
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
