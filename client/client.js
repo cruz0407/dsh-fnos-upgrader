@@ -512,7 +512,7 @@ function injectStyles() {
     // share the width, never claim it, and never let an icon button hit zero.
     // The foot is a shared row: share the width, never claim it, and keep the
     // icon buttons from being squeezed to zero.
-    '.duc-foot-row{flex:1 1 auto;width:auto;min-width:0;overflow:hidden}',
+    '.duc-foot-row{flex:none;width:100%;min-width:0}',
     '.duc-foot-row .duc-foot-btn,.duc-foot-row .duc-foot-quick{flex:0 1 auto;min-width:28px}',
     '.duc-tab{display:flex;flex-direction:column;gap:10px;padding:10px 2px}',
     '.duc-tab-intro{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#6b7280)}',
@@ -2784,24 +2784,17 @@ exports.apply = function apply(ctx) {
   const t = ctx.locale.bind(NS)
 
   // Beside Settings at the sidebar foot; the shell hands each occupant { wide }.
-  // The sidebar foot is one shared flex row and the fnOS refresh/restart group
-  // claims it; a fourth occupant can only survive there as a bare icon. Plugin
-  // management lives on the Plugins page, so the assistant is a tab there —
-  // same place as 已安装 / 插件市场, with room for a real sentence.
-  // This build's Plugins page declares `plugins.tab` (ui-plugin-manager); older
-  // compositions exposed `settings.plugins.tab` instead. Register on both — a
-  // slot that never resolves simply never fires, which is how dsh-market ships
-  // the same entry across versions.
-  const registerTab = (slot) => ctx.slots.inject(slot, () => ctx.slots.register({
-    name: slot,
-    id: slot === 'plugins.tab' ? 'fnos-upgrader' : 'fnos-upgrader-settings',
-    order: 65,
+  // The foot wraps, and a full-width occupant lands on its own row under the
+  // fnOS refresh/restart group — exactly how that group itself renders. Sharing
+  // their line (width:auto) squeezed both labels into "更新…" / "一键…".
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'update-copilot-trigger',
+    order: 10,
     label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
-  }, (props) => h(UpgraderTab, { t: props?.t ?? t })))
-  registerTab('plugins.tab')
-  registerTab('settings.plugins.tab')
+  }, (props) => h(FootTrigger, { t, wide: props?.wide === true })))
 
   // The popup: one frame-wide floating layer occupant that renders null closed.
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
