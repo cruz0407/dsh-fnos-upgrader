@@ -462,6 +462,7 @@ function injectStyles() {
     '.duc-version-label{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280)}',
     '.duc-select{width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary,inherit);background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.08));border:1px solid rgba(127,127,127,.35)}',
     '.duc-select:disabled{opacity:.55}',
+
     // fnOS: mirror the host footer group (刷新 / 重启) exactly — the same
     // group surface (bg-layer-2, 2px padding, 2px gap, large radius) and the
     // same inner button metrics as a Semi small tertiary ButtonGroup.
@@ -501,6 +502,12 @@ function injectStyles() {
     '.duc-modal-body{padding:12px 16px 16px;overflow:auto;display:flex;flex-direction:column;gap:12px}',
     '.duc-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;opacity:.75}',
     '.duc-bulk-progress{flex:1 1 180px;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    // Last, so it wins over the group chrome above: the foot is a shared row —
+    // share the width, never claim it, and never let an icon button hit zero.
+    // The foot is a shared row: share the width, never claim it, and keep the
+    // icon buttons from being squeezed to zero.
+    '.duc-foot-row{flex:1 1 auto;width:auto;min-width:0;overflow:hidden}',
+    '.duc-foot-row .duc-foot-btn,.duc-foot-row .duc-foot-quick{flex:0 1 auto;min-width:28px}',
   ].join('\n')
   // Self-healing replace: a page that kept an older bundle's sheet (same id,
   // possibly without the rules a newer bundle adds) must not block the fresh
@@ -2488,8 +2495,60 @@ function FootTrigger({ t, wide }) {
     h('span', { className: 'duc-quick-icon' }, BoltIcon()),
     wide === true ? h('span', { className: 'duc-foot-label' }, quickLabel) : null)
 
+  // The foot is a shared flex row: the fnOS refresh/restart group, this entry,
+  // and whatever else a profile mounts all compete for the same width. Measure
+  // the slot we actually got and degrade in steps instead of letting two
+  // labels collapse into "更新…" / "一键…".
+  const rootRef = useRef(null)
+  const [fit, setFit] = useState(0) // 0 full, 1 quick icon-only, 2 icons only, 3 trigger only
+  useEffect(() => {
+    if (wide !== true) return undefined
+    const el = rootRef.current
+    if (el === null || typeof ResizeObserver === 'undefined') return undefined
+    const measure = (width) => {
+      setFit(width < 110 ? 3 : width < 175 ? 2 : width < 300 ? 1 : 0)
+    }
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect
+      if (box !== undefined) measure(box.width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [wide])
+  const triggerNode = wide === true && fit <= 1
+    ? trigger
+    : wide === true
+      ? h('button', {
+          className: 'duc-foot-btn',
+          title: liveRunning
+            ? t('liveUpdating', { name: liveName ?? '…' })
+            : showBadge ? t('badgeTitle', { n: behind }) : t('nav'),
+          'aria-label': t('nav'),
+          'aria-haspopup': 'dialog',
+          onClick: (e) => setUi({ open: true, opener: e.currentTarget, ...(ui.autoUpdate === true ? { autoRunAll: true } : {}) }),
+        },
+          h('span', { className: 'duc-foot-icon' }, RadarIcon()),
+          liveRunning
+            ? h('span', { className: 'duc-foot-badge live' })
+            : showBadge
+              ? h('span', { className: 'duc-foot-badge' }, String(behind))
+              : null)
+      : trigger
+  const quickNode = wide !== true
+    ? quickButton
+    : fit >= 3
+      ? null
+      : fit === 2
+        ? h('button', {
+            className: quickClass,
+            title: quickTitle,
+            'aria-label': t('quickUpdate'),
+            disabled: quickBusy,
+            onClick: onQuick,
+          }, h('span', { className: 'duc-quick-icon' }, BoltIcon()))
+        : quickButton
   return wide === true
-    ? h('div', { className: 'duc-foot-row' }, trigger, quickButton)
+    ? h('div', { className: 'duc-foot-row', ref: rootRef }, triggerNode, quickNode)
     : h('div', { className: 'duc-foot-stack' }, trigger, quickButton)
 }
 
