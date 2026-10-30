@@ -513,6 +513,9 @@ function injectStyles() {
     // The foot is a shared row: share the width, never claim it, and keep the
     // icon buttons from being squeezed to zero.
     '.duc-foot-row{flex:none;width:100%;min-width:0}',
+    // The host foot is one nowrap flex row; with wrap enabled our full-width
+    // group drops under the fnOS refresh/restart group instead of squeezing it.
+    '[class*="footerActions"]{flex-wrap:wrap;row-gap:4px}',
     '.duc-foot-row .duc-foot-btn,.duc-foot-row .duc-foot-quick{flex:0 1 auto;min-width:28px}',
     '.duc-tab{display:flex;flex-direction:column;gap:10px;padding:10px 2px}',
     '.duc-tab-intro{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#6b7280)}',
@@ -2515,6 +2518,19 @@ function FootTrigger({ t, wide }) {
     if (el === null || typeof ResizeObserver === 'undefined') return undefined
     const measure = (width) => {
       setFit(width < 110 ? 3 : width < 175 ? 2 : width < 300 ? 1 : 0)
+    }
+    // Belt and braces for the CSS above: the class name is hashed per build, so
+    // flip the real ancestor to wrap directly when it is a nowrap flex row.
+    if (typeof getComputedStyle === 'function') {
+      let node = el.parentElement
+      for (let depth = 0; node !== null && depth < 4; depth += 1, node = node.parentElement) {
+        try {
+          const style = getComputedStyle(node)
+          if (!style.display.includes('flex')) continue
+          if (style.flexWrap === 'nowrap') node.style.flexWrap = 'wrap'
+          break
+        } catch { break }
+      }
     }
     const observer = new ResizeObserver((entries) => {
       const box = entries[0]?.contentRect
