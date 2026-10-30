@@ -59,6 +59,11 @@ const zh = {
   coreExecBlocked: '本体更新被闸门拦下',
   coreUpdated: '✓ 本体已更新至 {v}',
   coreRestartHint: '当前进程仍运行旧版 {cur} —— 重启 dsh（如 dsh web）后新版本才生效。',
+  corePickVersion: '指定本体版本',
+  coreBlockedBy: '这些插件不接受该版本：{names}',
+  coreUpdatePluginsFirst: '先把下面这些插件更新到最新版，再装这个本体版本即可。',
+  coreInstallSelected: '安装所选版本',
+  coreSameVersion: '就是当前版本',
   coreRollbackCmd: '回滚命令（重装 {v}）',
   pluginsTitle: '插件（跨 profile 合并）',
   noPlugins: '没有任何插件依赖',
@@ -215,6 +220,11 @@ const en = {
   coreExecBlocked: 'Core update blocked by the gate',
   coreUpdated: '✓ Core updated to {v}',
   coreRestartHint: 'This process still runs the old {cur} — restart dsh (e.g. dsh web) for the new version to take effect.',
+  corePickVersion: 'Pin a core version',
+  coreBlockedBy: 'Plugins that refuse this version: {names}',
+  coreUpdatePluginsFirst: 'Update those plugins to their latest release first, then install this core version.',
+  coreInstallSelected: 'Install selected version',
+  coreSameVersion: 'Already the running version',
   coreRollbackCmd: 'Rollback command (reinstall {v})',
   pluginsTitle: 'Plugins (merged across profiles)',
   noPlugins: 'No plugin dependencies installed',
@@ -448,6 +458,10 @@ function injectStyles() {
     '.duc-foot-row{display:flex;align-items:center;gap:4px;width:calc(100% + 8px);margin:4px -4px;box-sizing:border-box}',
     '.duc-foot-row .duc-foot-btn{width:auto;flex:1;min-width:0;margin:0}',
     '.duc-foot-stack{display:flex;flex-direction:column;align-items:center;gap:2px}',
+    '.duc-version-row{display:flex;flex-direction:column;gap:6px;margin:2px 0 8px}',
+    '.duc-version-label{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280)}',
+    '.duc-select{width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary,inherit);background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.08));border:1px solid rgba(127,127,127,.35)}',
+    '.duc-select:disabled{opacity:.55}',
     // fnOS: mirror the host footer group (刷新 / 重启) exactly — the same
     // group surface (bg-layer-2, 2px padding, 2px gap, large radius) and the
     // same inner button metrics as a Semi small tertiary ButtonGroup.
@@ -1731,16 +1745,42 @@ function CoreCard({ t, core, compat, onUpdated }) {
   const coreRow = core.packages[0]
   const summary = compatSummary(compat)
   const install = core.install ?? { method: 'unknown', writable: false, prefix: null }
-  // Single target: the newest healthy published version (the server's own
-  // line — never a dist-tag string).
-  const target = coreRow !== undefined && typeof coreRow.latest === 'string' && coreRow.latest !== ''
+  // The pin is a choice, not a constant: the list carries every published
+  // release with the plugins that would refuse it, so an operator can stay on
+  // an older core while the ecosystem catches up (or jump ahead deliberately).
+  const [choices, setChoices] = useState(null)
+  const [chosen, setChosen] = useState(null)
+  useEffect(() => {
+    let alive = true
+    api('/fnos-upgrader/core-versions?profile=web')
+      .then((data) => {
+        if (!alive || data === null || typeof data !== 'object') return
+        setChoices(data)
+        setChosen((prev) => prev ?? data.recommended ?? data.current ?? null)
+      })
+      .catch(() => { /* the picker is optional; the radar target stays */ })
+    return () => { alive = false }
+  }, [])
+  const chosenRow = choices?.versions?.find((row) => row.version === chosen) ?? null
+  const target = chosenRow !== null
     ? {
-        version: coreRow.latest,
-        relation: coreRow.updateAvailable === true
-          ? 'upgrade'
-          : (typeof coreRow.current === 'string' && coreRow.latest === coreRow.current ? 'same' : 'downgrade'),
+        version: chosenRow.version,
+        relation: chosenRow.relation,
+        compatible: chosenRow.compatible !== false,
+        compatibleAfterUpdate: chosenRow.compatibleAfterUpdate === true,
+        blocking: chosenRow.blocking ?? [],
       }
-    : null
+    : coreRow !== undefined && typeof coreRow.latest === 'string' && coreRow.latest !== ''
+      ? {
+          version: coreRow.latest,
+          relation: coreRow.updateAvailable === true
+            ? 'upgrade'
+            : (typeof coreRow.current === 'string' && coreRow.latest === coreRow.current ? 'same' : 'downgrade'),
+          compatible: true,
+          compatibleAfterUpdate: true,
+          blocking: [],
+        }
+      : null
   const actionsDisabled = busy || liveRunning
   // Previous progress event for the speed/ETA pair (one render of lag on
   // the rate is invisible; the first event simply has no previous).
@@ -1770,9 +1810,12 @@ function CoreCard({ t, core, compat, onUpdated }) {
     setProgress({ percent: null, phase: 'start' })
     try {
       const outcome = await streamCoreUpdate({
-        // A deliberately chosen downgrade IS the intent: its second (red)
-        // confirm click rides force. Gate overrides use their own button.
-        ...(target.relation === 'downgrade' || force === true ? { force: true } : {}),
+        // The pinned version is explicit whenever the picker has one: the
+        // server must not re-resolve it. A deliberately chosen downgrade or an
+        // incompatible release rides force — the second (red) confirm click is
+        // the acknowledgement. Gate overrides use their own button.
+        ...(chosenRow !== null ? { target: target.version } : {}),
+        ...(target.relation === 'downgrade' || target.compatible === false || force === true ? { force: true } : {}),
       }, (event) => {
         if (event.type === 'progress') setProgress(normalizeProgressEvent(event))
         else if (event.type === 'retry') setProgress({ percent: null, phase: 'retry' })
@@ -1819,6 +1862,35 @@ function CoreCard({ t, core, compat, onUpdated }) {
       h('span', { className: `duc-badge ${p.updateAvailable ? 'behind' : (p.reached === false ? 'unknown' : 'ok')}` },
         p.updateAvailable ? t('coreBehind') : (p.reached === false ? t('cannotCheck') : t('coreCurrent'))))),
     !collapsed ? h('div', { className: 'duc-note' }, t('corePolicy')) : null,
+    !collapsed && choices !== null && Array.isArray(choices.versions) && choices.versions.length > 0
+      ? h('div', { className: 'duc-version-row' },
+          h('label', { className: 'duc-version-label', htmlFor: 'duc-core-version' }, t('corePickVersion')),
+          h('select', {
+            id: 'duc-core-version',
+            className: 'duc-select',
+            value: chosen ?? '',
+            disabled: actionsDisabled,
+            onChange: (e) => {
+              setChosen(e.target.value)
+              setConfirming(false)
+              setForceConfirming(false)
+              setResult(null)
+            },
+          }, choices.versions.map((row) => h('option', { key: row.version, value: row.version },
+            `${row.version}${row.relation === 'same' ? ` · ${t('coreCurrent')}` : ''}`
+            + `${row.compatible === true ? ' ✓' : row.compatibleAfterUpdate === true ? ' ⚠' : ' ✖'}`))),
+          target !== null && target.compatible === false
+            ? h('div', { className: 'duc-note duc-error' },
+                t('coreBlockedBy', {
+                  names: (target.blocking ?? [])
+                    .map((row) => `${row.name}${row.supports === '' ? '' : `（${row.supports}）`}`)
+                    .join('；'),
+                }))
+            : null,
+          target !== null && target.compatible === false && target.compatibleAfterUpdate === true
+            ? h('div', { className: 'duc-note' }, t('coreUpdatePluginsFirst'))
+            : null)
+      : null,
     !collapsed && target !== null && command !== null ? h('div', null,
       target.relation === 'downgrade' ? h('div', { className: 'duc-banner warn' },
         t('coreDowngradeWarn', {
@@ -1842,7 +1914,7 @@ function CoreCard({ t, core, compat, onUpdated }) {
               disabled: actionsDisabled,
             }, confirming
               ? (target.relation === 'downgrade' ? t('coreConfirmDown') : t('coreConfirm'))
-              : t('coreUpdate'))),
+              : (chosenRow !== null ? t('coreInstallSelected') : t('coreUpdate')))),
 
       h(ProgressBar, { t, progress, previous: coreProgressPrevious }),
 
