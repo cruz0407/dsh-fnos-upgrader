@@ -2788,14 +2788,20 @@ exports.apply = function apply(ctx) {
   // claims it; a fourth occupant can only survive there as a bare icon. Plugin
   // management lives on the Plugins page, so the assistant is a tab there —
   // same place as 已安装 / 插件市场, with room for a real sentence.
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
-    id: 'fnos-upgrader',
+  // This build's Plugins page declares `plugins.tab` (ui-plugin-manager); older
+  // compositions exposed `settings.plugins.tab` instead. Register on both — a
+  // slot that never resolves simply never fires, which is how dsh-market ships
+  // the same entry across versions.
+  const registerTab = (slot) => ctx.slots.inject(slot, () => ctx.slots.register({
+    name: slot,
+    id: slot === 'plugins.tab' ? 'fnos-upgrader' : 'fnos-upgrader-settings',
     order: 65,
     label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
   }, (props) => h(UpgraderTab, { t: props?.t ?? t })))
+  registerTab('plugins.tab')
+  registerTab('settings.plugins.tab')
 
   // The popup: one frame-wide floating layer occupant that renders null closed.
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
